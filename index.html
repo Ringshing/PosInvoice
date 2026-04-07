@@ -6,7 +6,53 @@
     <title>MTJ Store Management</title>
     <script src="https://cdn.tailwindcss.com"></script>
 </head>
+<div id="pin-lock-screen" class="fixed inset-0 bg-gray-900 bg-opacity-95 z-[9999] flex flex-col items-center justify-center print:hidden">
+    <div class="bg-white p-8 rounded-xl shadow-2xl text-center max-w-sm w-full">
+        <h2 class="text-2xl font-bold mb-4 text-gray-800">System Locked</h2>
+        <input type="password" id="pos-pin" placeholder="Enter PIN" class="w-full p-3 border-2 border-gray-300 rounded mb-4 text-center text-2xl tracking-widest outline-none focus:border-blue-500">
+        <button onclick="unlockSystem()" class="w-full bg-blue-600 text-white p-3 rounded font-bold hover:bg-blue-700 transition-colors">Unlock POS</button>
+        <p id="pin-error" class="text-red-500 mt-3 text-sm font-bold hidden">Incorrect PIN or Offline</p>
+    </div>
+</div>
+
+<script>
+    async function unlockSystem() {
+        const pin = document.getElementById('pos-pin').value;
+        const btn = document.querySelector('#pin-lock-screen button');
+        btn.innerText = "Verifying...";
+        
+        // Wait for Firebase to be ready
+        if(!window.loginWithPin) {
+            setTimeout(unlockSystem, 500);
+            return;
+        }
+
+        const success = await window.loginWithPin(pin);
+        if (success) {
+            document.getElementById('pin-lock-screen').style.display = 'none';
+            // Trigger a data refresh for analytics specifically
+            if (typeof loadAnalytics === 'function') {
+                loadAnalytics();
+            }
+        } else {
+            document.getElementById('pin-error').classList.remove('hidden');
+            btn.innerText = "Unlock POS";
+            document.getElementById('pos-pin').value = "";
+        }
+    }
+
+    // Auto-check if already logged in
+    window.addEventListener('load', async () => {
+        if(window.firebaseReady) {
+            const isLoggedIn = await window.firebaseReady;
+            if(isLoggedIn) {
+                document.getElementById('pin-lock-screen').style.display = 'none';
+            }
+        }
+    });
+</script>
 <body class="bg-gray-100 font-sans h-screen flex flex-col items-center justify-center">
+    
     <div class="bg-white p-10 rounded-xl shadow-2xl max-w-2xl w-full text-center">
         <h1 class="text-3xl font-bold text-gray-800 mb-2">Cloud POS System</h1>
         <p class="text-gray-500 mb-8 font-semibold text-green-600">Offline-First Engine Active</p>
