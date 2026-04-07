@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cloud Analytics</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 font-sans p-8">
+    <div class="max-w-6xl mx-auto">
+        <div class="flex justify-between items-center mb-8 bg-white p-4 rounded-lg shadow">
+            <h1 class="text-2xl font-bold text-gray-800">📊 Cloud Store Analytics</h1>
+            <a href="index.html" class="bg-blue-600 text-white px-4 py-2 rounded">🏠 Home</a>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+            <div class="bg-white p-6 rounded-lg shadow-lg border-l-4 border-green-500">
+                <h3 class="text-gray-500 text-sm font-bold">Total Sales (Cloud Synced)</h3>
+                <p id="sales-total" class="text-3xl font-bold mt-2">Rs 0</p>
+                <p id="sales-count" class="text-sm text-green-600 mt-1">0 Invoices</p>
+            </div>
+            <div class="bg-white p-6 rounded-lg shadow-lg border-l-4 border-red-500">
+                <h3 class="text-gray-500 text-sm font-bold">Total Services/Returns</h3>
+                <p id="returns-count" class="text-3xl font-bold mt-2">0 Slips</p>
+            </div>
+        </div>
+        
+        <div class="bg-white p-6 rounded-lg shadow-lg text-center">
+            <button onclick="loadAnalytics()" class="bg-gray-800 text-white px-6 py-2 rounded shadow hover:bg-gray-900">
+                ↻ Sync & Refresh Data
+            </button>
+            <p id="status-text" class="text-sm text-gray-500 mt-2">Click to pull latest data from Firestore</p>
+        </div>
+    </div>
+
+    <script type="module" src="firebase-db.js"></script>
+<script>
+        async function loadAnalytics() {
+            // 1. Show loading state immediately
+            document.getElementById('status-text').innerText = "Syncing from cloud...";
+            
+            // 2. Wait for Firebase Auth to verify the POS PIN (No more 500ms guessing)
+            await window.firebaseReady; 
+            
+            try {
+                // 3. Fetch data using the secure cloud function
+                const data = await window.fetchStoreAnalytics();
+                
+                // 4. Calculate total sales correctly
+                let totalSales = data.sales.reduce((sum, item) => sum + (item.total || 0), 0);
+                
+                // 5. Update the UI elements
+                document.getElementById('sales-total').innerText = 'Rs ' + totalSales.toLocaleString();
+                document.getElementById('sales-count').innerText = data.sales.length + ' Invoices';
+                document.getElementById('returns-count').innerText = data.returns.length + ' Slips';
+                document.getElementById('status-text').innerText = "Data up to date!";
+                
+            } catch(e) {
+                // 6. Handle errors (e.g., if they haven't entered the PIN yet)
+                console.error(e);
+                document.getElementById('status-text').innerText = "Failed to load data. System locked or offline.";
+            }
+        }
+        
+        // Auto load when the page opens
+        window.onload = loadAnalytics;
+    </script>
+</body>
+</html>

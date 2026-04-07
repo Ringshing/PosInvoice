@@ -1,0 +1,818 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PKR Invoice</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        /* Base styles */
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f3f4f6;
+        }
+        /* Custom styles for the receipt/invoice view */
+        .receipt-container {
+            max-width: 80mm; 
+            padding: 5px;
+            margin: 0 auto;
+            background-color: white;
+            color: black;
+            font-family: 'Consolas', 'Courier New', monospace; 
+            font-size: 12px; 
+            min-height: 160mm;
+        }
+        .dotted-line {
+            border-top: 2px solid black; 
+            margin: 5px 0;
+        }
+
+        /* Styles specifically for printing */
+        @media print {
+            @page {
+                margin: 0;
+                size: 80mm auto; 
+            }
+            body {
+                margin: 0 !important;
+                padding: 0 !important;
+                width: 80mm !important; 
+                background-color: white; 
+                -webkit-print-color-adjust: exact; 
+                color-adjust: exact;
+            }
+            .no-print {
+                display: none !important;
+            }
+            .receipt-container {
+                display: block !important;
+                max-width: 80mm !important; 
+                box-shadow: none;
+                break-inside: avoid;
+            }
+        }
+        #print-area {
+            display: none;
+        }
+        #history-result-container {
+            border: 2px dashed #000;
+            padding: 10px;
+            margin-top: 15px;
+            background-color: #f9f9f9;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container mx-auto p-4 md:p-8">
+        
+        <div class="no-print w-full lg:w-3/4 xl:w-1/2 mx-auto">
+            
+            <h1 class="text-3xl font-bold mb-6 text-gray-800">PKR Invoice Generator (Tax-Free)</h1>
+
+            <div class="bg-white p-4 rounded-lg shadow-lg mb-4">
+                <h3 class="text-lg font-semibold mb-3 text-gray-700">Vendor / Store Details</h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label for="company-name" class="block text-sm font-medium text-gray-700">Company Name</label>
+                        <input type="text" id="company-name" value="Ringshing.com" class="mt-1 w-full p-2 border border-gray-300 rounded">
+                    </div>
+                    <div>
+                        <label for="address-line-1" class="block text-sm font-medium text-gray-700">Address Line 1 (Location)</label>
+                        <input type="text" id="address-line-1" value="Ground Floor, Avenue Mall, DHA, Ghazi Road, Lahore" class="mt-1 w-full p-2 border border-gray-300 rounded">
+                    </div>
+                    <div>
+                        <label for="address-line-2" class="block text-sm font-medium text-gray-700">Address Line 2 (Contact)</label>
+                        <input type="text" id="address-line-2" value="Phone: 0303-5133646 | Email: billing@ringshing.com" class="mt-1 w-full p-2 border border-gray-300 rounded">
+                    </div>
+                    <div>
+                        <label for="invoice-id" class="block text-sm font-medium text-gray-700">Invoice ID</label>
+                        <input type="text" id="invoice-id" value="5874" class="mt-1 w-full p-2 border border-gray-300 rounded font-mono font-bold" readonly>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="bg-white p-4 rounded-lg shadow-lg mb-4 border-l-4 border-green-500">
+                <h3 class="text-lg font-semibold mb-3 text-green-700">Customer Details (Optional)</h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label for="customer-name" class="block text-sm font-medium text-gray-700">Customer Name</label>
+                        <input type="text" id="customer-name" placeholder="Name" class="mt-1 w-full p-2 border border-gray-300 rounded">
+                    </div>
+                    <div>
+                        <label for="customer-phone" class="block text-sm font-medium text-gray-700">Customer Phone / Address</label>
+                        <input type="text" id="customer-phone" placeholder="Phone or Address Line" class="mt-1 w-full p-2 border border-gray-300 rounded">
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-white p-4 rounded-lg shadow-lg mb-4 border-l-4 border-red-500">
+                <h3 class="text-lg font-semibold mb-3 text-red-700">Payment Method</h3>
+                <div class="flex space-x-4">
+                    <label class="inline-flex items-center">
+                        <input type="radio" name="payment-method" id="pay-cash" value="Cash" checked class="form-radio text-blue-600">
+                        <span class="ml-2">Cash</span>
+                    </label>
+                    <label class="inline-flex items-center">
+                        <input type="radio" name="payment-method" id="pay-card" value="Card" class="form-radio text-blue-600">
+                        <span class="ml-2">Card</span>
+                    </label>
+                    <label class="inline-flex items-center">
+                        <input type="radio" name="payment-method" id="pay-bank" value="Bank Transfer" class="form-radio text-blue-600">
+                        <span class="ml-2">Bank Transfer</span>
+                    </label>
+                </div>
+            </div>
+            
+            <div class="bg-white p-4 rounded-lg shadow-lg mb-4">
+                <h3 class="text-lg font-semibold mb-2 text-gray-700">🔎 Product Search</h3>
+                <div id="product-load-status" class="text-sm mt-2 text-blue-600 font-medium p-2 bg-blue-50 rounded-lg mb-4">
+                    Checking product data status...
+                </div>
+                <div class="relative">
+                    <input type="text" id="product-search-input" placeholder="Start typing product name (e.g. RSR-202 15)..." class="w-full p-2 border border-gray-300 rounded focus:ring-blue-500 focus:border-blue-500">
+                    <div id="product-results" class="absolute z-10 w-full bg-white border border-gray-300 rounded mt-1 max-h-60 overflow-y-auto hidden shadow-xl">
+                    </div>
+                </div>
+            </div>
+
+            <div id="new-item-inputs" class="bg-white p-4 rounded-lg shadow-lg mb-4 border-t-4 border-blue-500">
+                <h3 class="text-lg font-semibold mb-3 text-blue-700">New Item Details</h3>
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <div class="col-span-1 md:col-span-2">
+                        <label for="new-item-desc" class="block text-sm font-medium text-gray-700">Description (Full Name or Custom)</label>
+                        <input type="text" id="new-item-desc" class="mt-1 w-full p-2 border border-gray-300 rounded bg-gray-100" readonly> 
+                    </div>
+                    <div>
+                        <label for="new-item-qty" class="block text-sm font-medium text-gray-700">Quantity</label>
+                        <input type="number" id="new-item-qty" value="1" min="1" class="mt-1 w-full p-2 border border-gray-300 rounded">
+                    </div>
+                    <div>
+                        <label for="new-item-price" class="block text-sm font-medium text-gray-700">Unit Price</label>
+                        <input type="number" id="new-item-price" step="0.01" min="0" class="mt-1 w-full p-2 border border-gray-300 rounded bg-gray-100" readonly> 
+                    </div>
+                </div>
+                <div class="flex space-x-2 mt-4">
+                    <button onclick="commitNewLineItem()" class="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded transition duration-150 ease-in-out">
+                        Add to Invoice
+                    </button>
+                    <button onclick="enableManualEntry()" id="manual-entry-button" class="w-1/2 bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded transition duration-150 ease-in-out">
+                        Custom/Manual Entry
+                    </button>
+                </div>
+            </div>
+
+            <div id="invoice-items" class="mt-4 bg-white p-4 rounded-lg shadow-lg">
+                <h3 class="text-lg font-semibold mb-3 text-gray-700">Invoice Items</h3>
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-200">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th class="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-1/2">Description</th>
+                                <th class="px-2 py-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-1/6">Qty</th>
+                                <th class="px-2 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider w-1/6">Unit Price</th>
+                                <th class="px-2 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider w-1/6">Total</th>
+                                <th class="px-2 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider w-1/12"></th>
+                            </tr>
+                        </thead>
+                        <tbody id="items-table-body" class="bg-white divide-y divide-gray-200">
+                        </tbody>
+                    </table>
+                </div>
+                
+                <div class="flex justify-end mt-4 text-sm">
+                    <div class="w-1/2 md:w-1/3 space-y-2">
+                         <div class="flex justify-between">
+                            <label for="discount-percentage" class="text-gray-700 mt-1 font-medium">Discount (%)</label>
+                            <input type="number" id="discount-percentage" value="0.00" min="0" max="100" step="0.01" oninput="applyDiscount(this, 'percentage')" class="w-24 p-1 border border-gray-300 rounded text-right">
+                        </div>
+                        <div class="flex justify-between">
+                            <label for="discount-amount" class="text-gray-700 mt-1 font-medium">Discount (Amount)</label>
+                            <input type="number" id="discount-amount" value="0.00" min="0" step="0.01" oninput="applyDiscount(this, 'amount')" class="w-24 p-1 border border-gray-300 rounded text-right">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="flex justify-end mt-4 text-sm font-medium text-gray-900">
+                    <div class="w-1/2 md:w-1/3 space-y-1">
+                        <div class="flex justify-between">
+                            <span>Subtotal:</span>
+                            <span id="sub-total">0.00</span>
+                        </div>
+                        <div class="flex justify-between font-semibold text-red-600">
+                            <span>Discount:</span>
+                            <span id="discount-display">0.00</span>
+                        </div>
+                         <div class="flex justify-between font-bold text-xl border-t pt-2 mt-2 border-gray-300">
+                            <span>Grand Total (PKR):</span>
+                            <span id="grand-total">0.00</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="bg-white p-4 rounded-lg shadow-lg mt-6 border-t-4 border-yellow-500">
+                <h3 class="text-lg font-bold mb-3 text-yellow-700">Historical Record Lookup (Cloud/Offline)</h3>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div class="col-span-1">
+                        <label for="search-id" class="block text-sm font-medium text-gray-700">Search by Invoice ID</label>
+                        <input type="text" id="search-id" placeholder="e.g. 5874" class="mt-1 w-full p-2 border border-gray-300 rounded">
+                    </div>
+                    <div class="col-span-1">
+                        <label for="search-date" class="block text-sm font-medium text-gray-700">Search by Date</label>
+                        <input type="date" id="search-date" class="mt-1 w-full p-2 border border-gray-300 rounded">
+                    </div>
+                    <div class="col-span-1 flex items-end">
+                        <button onclick="searchInvoiceHistory()" class="w-full bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-2 px-4 rounded transition duration-150 ease-in-out">
+                            🔍 Search Records
+                        </button>
+                    </div>
+                </div>
+                <div id="history-result-container" class="mt-4 text-gray-600">
+                    Enter an Invoice ID or Date to find a historical record.
+                </div>
+            </div>
+            
+            <button onclick="printInvoice()" class="w-full mt-6 bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 px-4 rounded-lg text-lg transition duration-150 ease-in-out">
+                🖨️ Generate & Print Receipt (Save Record & Cloud Sync)
+            </button>
+        </div>
+        
+        <div id="print-area" class="receipt-container hidden"></div>
+
+    </div>
+
+    <script type="module" src="firebase-db.js"></script>
+    <script src="productData.js"></script>
+
+    <script>
+        // --- GLOBAL STATE ---
+        let items = []; 
+        const INITIAL_INVOICE_ID = 5874;
+
+        function formatCurrency(amount) {
+            return new Intl.NumberFormat('en-PK', {
+                style: 'currency',
+                currency: 'PKR',
+                minimumFractionDigits: 2
+            }).format(amount).replace('PKR', 'Rs ');
+        }
+        
+        function loadInvoiceId() {
+            let lastId = localStorage.getItem('lastInvoiceId');
+            let currentId = parseInt(lastId) || INITIAL_INVOICE_ID;
+            document.getElementById('invoice-id').value = currentId;
+        }
+
+        function incrementAndSaveInvoiceId() {
+            let currentId = parseInt(document.getElementById('invoice-id').value);
+            let nextId = currentId + 1;
+            localStorage.setItem('lastInvoiceId', nextId);
+            document.getElementById('invoice-id').value = nextId;
+        }
+
+        // --- DISCOUNT LOGIC ---
+        function applyDiscount(inputElement, type) {
+            const percentageInput = document.getElementById('discount-percentage');
+            const amountInput = document.getElementById('discount-amount');
+            let value = parseFloat(inputElement.value) || 0;
+
+            if (value < 0) value = 0;
+            inputElement.value = value.toFixed(2);
+
+            if (type === 'percentage' && value > 0) {
+                amountInput.value = '0.00'; 
+            } else if (type === 'amount' && value > 0) {
+                percentageInput.value = '0.00'; 
+            }
+            renderItems();
+        }
+
+        // --- CUSTOM / MANUAL ENTRY LOGIC ---
+        function enableManualEntry() {
+            const descInput = document.getElementById('new-item-desc');
+            const priceInput = document.getElementById('new-item-price');
+            const searchInput = document.getElementById('product-search-input');
+            const resultsDiv = document.getElementById('product-results');
+            const manualButton = document.getElementById('manual-entry-button');
+
+            const isManual = descInput.hasAttribute('readonly');
+
+            if (isManual) {
+                descInput.removeAttribute('readonly');
+                priceInput.removeAttribute('readonly');
+                descInput.classList.remove('bg-gray-100');
+                priceInput.classList.remove('bg-gray-100');
+                searchInput.value = '';
+                resultsDiv.classList.add('hidden');
+                manualButton.textContent = "Disable Manual Entry";
+                manualButton.classList.remove('bg-gray-500');
+                manualButton.classList.add('bg-orange-500');
+                descInput.focus();
+            } else {
+                descInput.setAttribute('readonly', 'readonly');
+                priceInput.setAttribute('readonly', 'readonly');
+                descInput.classList.add('bg-gray-100');
+                priceInput.classList.add('bg-gray-100');
+                manualButton.textContent = "Custom/Manual Entry";
+                manualButton.classList.remove('bg-orange-500');
+                manualButton.classList.add('bg-gray-500');
+                searchInput.focus();
+            }
+        }
+
+        // --- PRODUCT SEARCH AND ITEM MANAGEMENT ---
+        function handleProductSearch() {
+            const descInput = document.getElementById('new-item-desc');
+            if (!descInput.hasAttribute('readonly')) return;
+
+            const input = document.getElementById('product-search-input').value.toLowerCase().trim();
+            const resultsDiv = document.getElementById('product-results');
+            resultsDiv.innerHTML = '';
+
+            if (input.length < 3) {
+                resultsDiv.classList.add('hidden');
+                return;
+            }
+            
+            if (typeof productData === 'undefined' || !Array.isArray(productData) || productData.length === 0) {
+                resultsDiv.innerHTML = '<div class="p-2 text-red-500">Error: Product data not loaded.</div>';
+                resultsDiv.classList.remove('hidden');
+                return;
+            }
+
+            const searchTerms = input.split(/\s+/).filter(term => term.length > 0);
+            const filteredProducts = productData.filter(product => {
+                const searchString = (product.title + " " + product.variant).toLowerCase();
+                return searchTerms.every(term => searchString.includes(term));
+            }).slice(0, 10);
+
+            if (filteredProducts.length === 0) {
+                resultsDiv.innerHTML = '<div class="p-2 text-gray-500">No matching products found.</div>';
+            } else {
+                filteredProducts.forEach(product => {
+                    const resultItem = document.createElement('div');
+                    resultItem.className = 'p-2 cursor-pointer hover:bg-blue-100 border-b last:border-b-0';
+                    resultItem.innerHTML = `
+                        <div class="font-semibold text-sm">${product.title}</div>
+                        <div class="text-xs text-gray-600">${product.variant} | Price: ${formatCurrency(product.price)}</div>
+                    `;
+                    resultItem.onclick = () => prefillLineItem(product.id);
+                    resultsDiv.appendChild(resultItem);
+                });
+            }
+            resultsDiv.classList.remove('hidden');
+        }
+
+        function prefillLineItem(productId) {
+            const product = productData.find(p => p.id === productId);
+            if (product) {
+                document.getElementById('new-item-desc').setAttribute('readonly', 'readonly');
+                document.getElementById('new-item-price').setAttribute('readonly', 'readonly');
+                document.getElementById('new-item-desc').classList.add('bg-gray-100');
+                document.getElementById('new-item-price').classList.add('bg-gray-100');
+                document.getElementById('manual-entry-button').textContent = "Custom/Manual Entry";
+                document.getElementById('manual-entry-button').classList.remove('bg-orange-500');
+                document.getElementById('manual-entry-button').classList.add('bg-gray-500');
+
+                document.getElementById('new-item-desc').value = product.full_description;
+                document.getElementById('new-item-price').value = product.price.toFixed(2);
+                document.getElementById('new-item-qty').value = 1; 
+                document.getElementById('product-search-input').value = product.title; 
+                document.getElementById('product-results').classList.add('hidden'); 
+                document.getElementById('new-item-qty').focus();
+            }
+        }
+
+        function commitNewLineItem() {
+            const desc = document.getElementById('new-item-desc').value.trim();
+            const qty = parseFloat(document.getElementById('new-item-qty').value);
+            const price = parseFloat(document.getElementById('new-item-price').value);
+
+            if (desc && qty > 0 && price >= 0) {
+                items.push({
+                    description: desc,
+                    qty: qty,
+                    unitPrice: price
+                });
+
+                document.getElementById('new-item-desc').value = '';
+                document.getElementById('new-item-qty').value = '1';
+                document.getElementById('new-item-price').value = '';
+                document.getElementById('product-search-input').value = '';
+
+                if (!document.getElementById('new-item-desc').hasAttribute('readonly')) {
+                    enableManualEntry(); 
+                }
+
+                renderItems();
+                document.getElementById('product-search-input').focus();
+            } else {
+                alert("Please ensure a product is selected, and quantity/price are valid.");
+            }
+        }
+        
+        function updateItem(index, key, value) {
+            if (items[index]) {
+                if (key === 'qty' || key === 'unitPrice') {
+                    value = parseFloat(value) || 0;
+                }
+                items[index][key] = value;
+                renderItems();
+            }
+        }
+
+        function deleteItem(index) {
+            items.splice(index, 1);
+            renderItems();
+        }
+        
+        // --- PRINT HTML HELPERS ---
+        function getHeaderHtml(companyName) {
+            const companyText = companyName.toUpperCase() || 'RINGSHING.COM';
+            return `
+                <div class="text-center mb-1">
+                    <img 
+                        src="logo (2).png" 
+                        alt="Company Logo" 
+                        style="max-width: 60mm; height: auto; display: block; margin: 0 auto;"
+                        onerror="this.style.display='none'; this.parentElement.innerHTML='<span class=\\'text-lg font-extrabold\\'>${companyText}</span>';"
+                    >
+                </div>
+            `;
+        }
+        
+        function getFooterHtml(companyName) {
+            return `
+                <div class="dotted-line"></div>
+                <div class="text-center mt-2 text-sm font-bold">
+                    ** THANK YOU FOR SHOPPING **
+                </div>
+                <div class="text-center mt-2 text-sm font-bold">
+                    ${companyName || 'Ringshing.com'}
+                </div>
+                <div class="text-center mt-1 mb-4">
+                    <img src="qr.png" alt="QR Code" style="max-width: 40mm; height: auto; display: block; margin: 0 auto;" onerror="this.style.display='none';">
+                </div>
+            `;
+        }
+
+        function getSelectedPaymentMethod() {
+            const radios = document.getElementsByName('payment-method');
+            for (const radio of radios) {
+                if (radio.checked) {
+                    return radio.value;
+                }
+            }
+            return 'Cash'; 
+        }
+
+        // --- RENDER & CALCULATION ---
+        function renderItems() {
+            const discountPercent = parseFloat(document.getElementById('discount-percentage').value) / 100;
+            const discountAmountInput = parseFloat(document.getElementById('discount-amount').value);
+
+            const itemsTableBody = document.getElementById('items-table-body');
+            const printArea = document.getElementById('print-area');
+            let subTotal = 0;
+            let receiptItemsHtml = '';
+
+            itemsTableBody.innerHTML = '';
+
+            items.forEach((item, index) => {
+                const total = item.qty * item.unitPrice;
+                subTotal += total;
+
+                const row = itemsTableBody.insertRow();
+                row.insertCell(0).innerHTML = `<input type="text" value="${item.description}" class="w-full bg-transparent border-none p-1 text-sm" onchange="updateItem(${index}, 'description', this.value)">`;
+                row.insertCell(1).innerHTML = `<input type="number" value="${item.qty}" min="1" class="w-20 bg-transparent border-none p-1 text-sm text-center" onchange="updateItem(${index}, 'qty', this.value)">`;
+                row.insertCell(2).innerHTML = `<input type="number" value="${item.unitPrice.toFixed(2)}" step="0.01" min="0" class="w-24 bg-transparent border-none p-1 text-sm text-right" onchange="updateItem(${index}, 'unitPrice', this.value)">`;
+                row.insertCell(3).innerHTML = `<span class="font-bold text-right w-full block">${formatCurrency(total)}</span>`;
+                row.insertCell(4).innerHTML = `<button onclick="deleteItem(${index})" class="text-red-500 hover:text-red-700">X</button>`;
+                
+                receiptItemsHtml += `
+                    <div class="text-left font-normal">${item.description}</div>
+                    <div class="flex justify-between mb-1 text-xs">
+                        <span class="w-1/2 text-left text-xs">${item.qty} x ${item.unitPrice.toFixed(2)}</span>
+                        <span class="w-1/2 text-right font-bold">${formatCurrency(total)}</span>
+                    </div>
+                `;
+            });
+
+            // Calculate Discount
+            let discountAmount = 0;
+            if (discountPercent > 0) {
+                discountAmount = subTotal * discountPercent;
+            } else if (discountAmountInput > 0) {
+                discountAmount = discountAmountInput;
+            }
+
+            const grandTotal = subTotal - discountAmount;
+
+            // Update DOM Displays
+            document.getElementById('sub-total').textContent = formatCurrency(subTotal);
+            document.getElementById('discount-display').textContent = formatCurrency(discountAmount);
+            document.getElementById('grand-total').textContent = formatCurrency(grandTotal);
+
+            // Update Print Area
+            const invoiceId = document.getElementById('invoice-id').value;
+            const companyName = document.getElementById('company-name').value;
+            const addressLine1 = document.getElementById('address-line-1').value;
+            const addressLine2 = document.getElementById('address-line-2').value;
+            const customerName = document.getElementById('customer-name').value;
+            const customerPhone = document.getElementById('customer-phone').value;
+            const paymentMethod = getSelectedPaymentMethod();
+
+            const headerHtml = getHeaderHtml(companyName); 
+            const footerHtml = getFooterHtml(companyName);
+            
+            let customerHtml = '';
+            if (customerName || customerPhone) {
+                customerHtml = `
+                    <div class="dotted-line"></div>
+                    <div class="text-left text-sm font-bold">BILL TO:</div>
+                    <div class="text-left text-xs">${customerName || 'N/A'}</div>
+                    <div class="text-left text-xs">${customerPhone || 'N/A'}</div>
+                `;
+            }
+
+            const receiptHtml = `
+                ${headerHtml} <div class="text-center text-xs mb-1">${addressLine1 || 'Address Line 1'}</div>
+                <div class="text-center text-xs mb-1">${addressLine2 || 'Address Line 2'}</div>
+                <div class="text-center text-xs">Invoice/Receipt ID: ${invoiceId} | Date: ${new Date().toLocaleDateString('en-PK')}</div>
+                
+                ${customerHtml}
+
+                <div class="dotted-line"></div>
+                
+                <div class="flex justify-between font-bold text-sm">
+                    <span class="w-1/2 text-left">ITEM</span>
+                    <span class="w-1/2 text-right">TOTAL</span>
+                </div>
+                <div class="dotted-line"></div>
+                
+                ${receiptItemsHtml}
+                
+                <div class="dotted-line"></div>
+                
+                <div class="flex justify-between">
+                    <span>SUBTOTAL:</span>
+                    <span>${formatCurrency(subTotal)}</span>
+                </div>
+                
+                <div class="flex justify-between font-bold"> 
+                    <span>DISCOUNT:</span>
+                    <span>${formatCurrency(discountAmount)}</span>
+                </div>
+                
+                <div class="dotted-line"></div>
+                
+                <div class="flex justify-between text-lg font-extrabold mt-1">
+                    <span>GRAND TOTAL:</span>
+                    <span>${formatCurrency(grandTotal)}</span>
+                </div>
+
+                <div class="flex justify-between text-sm font-bold mt-2">
+                    <span>PAID VIA:</span>
+                    <span>${paymentMethod.toUpperCase()}</span>
+                </div>
+                
+                ${footerHtml} `;
+            
+            printArea.innerHTML = receiptHtml;
+        }
+
+        // --- FIREBASE AND LOCAL SAVING ---
+        function printInvoice() {
+            if (items.length === 0) {
+                alert("Cannot print an empty invoice. Please add items.");
+                return;
+            }
+
+            const invoiceId = document.getElementById('invoice-id').value;
+            
+            // Re-extract raw numbers carefully
+            const subTotalRaw = parseFloat(document.getElementById('sub-total').textContent.replace(/[^0-9.-]+/g, ""));
+            const discountRaw = parseFloat(document.getElementById('discount-display').textContent.replace(/[^0-9.-]+/g, ""));
+            const grandTotalRaw = parseFloat(document.getElementById('grand-total').textContent.replace(/[^0-9.-]+/g, ""));
+
+            const totals = {
+                subTotal: subTotalRaw,
+                discount: discountRaw,
+                grandTotal: grandTotalRaw,
+                discountPercent: parseFloat(document.getElementById('discount-percentage').value) || 0,
+                discountAmount: parseFloat(document.getElementById('discount-amount').value) || 0,
+            };
+
+            const record = {
+                id: invoiceId, // Saved as a string, e.g. "5874"
+                company: document.getElementById('company-name').value,
+                address1: document.getElementById('address-line-1').value,
+                address2: document.getElementById('address-line-2').value,
+                customerName: document.getElementById('customer-name').value.trim(),
+                customerPhone: document.getElementById('customer-phone').value.trim(),
+                date: new Date().toISOString(),
+                timestamp: Date.now(),
+                items: items,
+                totals: totals,
+                paymentMethod: getSelectedPaymentMethod(),
+                total: grandTotalRaw 
+            };
+
+            // 1. Save to local browser history
+            const records = JSON.parse(localStorage.getItem('invoiceRecords') || '[]');
+            records.push(record);
+            localStorage.setItem('invoiceRecords', JSON.stringify(records));
+
+            // 2. Save to Firebase Cloud
+            if (window.saveInvoiceToCloud) {
+                window.saveInvoiceToCloud(record);
+            } else {
+                console.warn("Cloud connection delayed, but data is safe in local backup.");
+            }
+
+            // 3. Trigger Print
+            document.getElementById('print-area').classList.remove('hidden');
+            window.print();
+            document.getElementById('print-area').classList.add('hidden');
+
+            // 4. Reset
+            incrementAndSaveInvoiceId();
+            items = []; 
+            document.getElementById('discount-percentage').value = '0.00';
+            document.getElementById('discount-amount').value = '0.00';
+            document.getElementById('customer-name').value = ''; 
+            document.getElementById('customer-phone').value = ''; 
+
+            renderItems();
+        }
+
+        // --- CLOUD/OFFLINE HISTORICAL SEARCH ---
+        async function searchInvoiceHistory() {
+            const searchId = document.getElementById('search-id').value.trim();
+            const searchDate = document.getElementById('search-date').value; 
+            const resultContainer = document.getElementById('history-result-container');
+            
+            if (!searchId && !searchDate) {
+                resultContainer.innerHTML = '<span class="text-red-600 font-bold">Please enter an Invoice ID or select a Date to search.</span>';
+                return;
+            }
+
+            // STAGE 1: Search Local Chrome Memory (Instant & Offline)
+            resultContainer.innerHTML = 'Searching local memory...';
+            const records = JSON.parse(localStorage.getItem('invoiceRecords') || '[]');
+            let foundInvoice = null;
+
+            if (searchId) {
+                foundInvoice = records.find(record => record.id === searchId);
+            } else if (searchDate) {
+                foundInvoice = records.find(record => record.date.startsWith(searchDate));
+            }
+
+            if (foundInvoice) {
+                displayHistoricalInvoiceReceipt(foundInvoice, "LOCAL CACHE");
+                return;
+            }
+
+            // STAGE 2: If Local Fails (Cache Cleared), Search Google Cloud
+            resultContainer.innerHTML = 'Not found locally. Searching Google Cloud...';
+            
+            if (window.searchInvoiceInCloud) {
+                const cloudResults = await window.searchInvoiceInCloud(searchId, searchDate);
+                
+                if (cloudResults && cloudResults.length > 0) {
+                    // Display the first matching result from the cloud
+                    displayHistoricalInvoiceReceipt(cloudResults[0], "CLOUD DATABASE");
+                    
+                    // Secretly save it back to local memory so the next search is instant!
+                    records.push(cloudResults[0]);
+                    localStorage.setItem('invoiceRecords', JSON.stringify(records));
+                } else {
+                    resultContainer.innerHTML = '<span class="text-red-600 font-bold">No record found in Local Memory OR Cloud Database.</span>';
+                }
+            } else {
+                resultContainer.innerHTML = '<span class="text-red-600 font-bold">Cloud search unavailable. Are you completely offline?</span>';
+            }
+        }
+        
+        function displayHistoricalInvoiceReceipt(record, sourceMessage) {
+            const resultContainer = document.getElementById('history-result-container');
+            const headerHtml = getHeaderHtml(record.company); 
+            const footerHtml = getFooterHtml(record.company);
+
+            let receiptItemsHtml = '';
+            record.items.forEach(item => {
+                const total = item.qty * item.unitPrice;
+                receiptItemsHtml += `
+                    <div class="text-left font-normal">${item.description}</div>
+                    <div class="flex justify-between mb-1 text-xs">
+                        <span class="w-1/2 text-left text-xs">${item.qty} x ${item.unitPrice.toFixed(2)}</span>
+                        <span class="w-1/2 text-right font-bold">${formatCurrency(total)}</span>
+                    </div>
+                `;
+            });
+            
+            const dateObj = new Date(record.date);
+            const formattedDate = dateObj.toLocaleDateString('en-PK') + ' ' + dateObj.toLocaleTimeString('en-PK');
+            const grandTotal = record.totals.grandTotal;
+
+            let customerHtml = '';
+            if (record.customerName || record.customerPhone) {
+                customerHtml = `
+                    <div class="dotted-line"></div>
+                    <div class="text-left text-sm font-bold">BILL TO:</div>
+                    <div class="text-left text-xs">${record.customerName || 'N/A'}</div>
+                    <div class="text-left text-xs">${record.customerPhone || 'N/A'}</div>
+                `;
+            }
+
+            const historicalPaymentMethod = record.paymentMethod || 'CASH';
+
+            const receiptHtml = `
+                <div class="text-center font-bold text-lg mb-1 text-green-700">-- HISTORICAL INVOICE FOUND --</div>
+                <div class="text-center text-xs font-bold text-gray-500 mb-2">(Retrieved from ${sourceMessage})</div>
+                <div class="receipt-container mx-auto p-2 bg-white shadow-md">
+                    ${headerHtml} <div class="text-center text-xs mb-1">${record.address1}</div>
+                    <div class="text-center text-xs mb-1">${record.address2}</div>
+                    <div class="text-center text-xs">Invoice/Receipt ID: ${record.id} | Date: ${formattedDate}</div>
+                    
+                    ${customerHtml}
+
+                    <div class="dotted-line"></div>
+                    
+                    <div class="flex justify-between font-bold text-sm">
+                        <span class="w-1/2 text-left">ITEM</span>
+                        <span class="w-1/2 text-right">TOTAL</span>
+                    </div>
+                    <div class="dotted-line"></div>
+                    
+                    ${receiptItemsHtml}
+                    
+                    <div class="dotted-line"></div>
+                    
+                    <div class="flex justify-between">
+                        <span>SUBTOTAL:</span>
+                        <span>${formatCurrency(record.totals.subTotal)}</span>
+                    </div>
+                    
+                    <div class="flex justify-between font-bold"> 
+                        <span>DISCOUNT:</span>
+                        <span>${formatCurrency(record.totals.discount)}</span>
+                    </div>
+                    
+                    <div class="dotted-line"></div>
+                    
+                    <div class="flex justify-between text-lg font-extrabold mt-1">
+                        <span>GRAND TOTAL:</span>
+                        <span>${formatCurrency(grandTotal)}</span>
+                    </div>
+
+                    <div class="flex justify-between text-sm font-bold mt-2">
+                        <span>PAID VIA:</span>
+                        <span>${historicalPaymentMethod.toUpperCase()}</span>
+                    </div>
+                    
+                    ${footerHtml} </div>
+                <button onclick="window.print()" class="w-full mt-4 bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded transition duration-150 ease-in-out">
+                    🖨️ Re-Print This Historical Receipt
+                </button>
+            `;
+            resultContainer.innerHTML = receiptHtml;
+        }
+
+        // --- INITIALIZATION ---
+        document.addEventListener('DOMContentLoaded', () => {
+            loadInvoiceId();
+            document.getElementById('company-name').addEventListener('input', renderItems);
+            document.getElementById('address-line-1').addEventListener('input', renderItems);
+            document.getElementById('address-line-2').addEventListener('input', renderItems);
+            document.getElementById('customer-name').addEventListener('input', renderItems); 
+            document.getElementById('customer-phone').addEventListener('input', renderItems); 
+            
+            document.getElementById('pay-cash').addEventListener('change', renderItems);
+            document.getElementById('pay-card').addEventListener('change', renderItems);
+            document.getElementById('pay-bank').addEventListener('change', renderItems);
+
+            document.getElementById('product-search-input').addEventListener('input', handleProductSearch);
+            renderItems();
+
+            const statusElement = document.getElementById('product-load-status');
+            if (typeof productData !== 'undefined' && Array.isArray(productData)) {
+                const count = productData.length;
+                if (count > 0) {
+                    statusElement.textContent = `✅ Data Load Successful! Loaded ${count} product variants.`;
+                    statusElement.className = 'text-sm mt-2 text-green-700 font-bold p-2 bg-green-100 rounded-lg mb-4';
+                } else {
+                    statusElement.textContent = '⚠️ Warning: Product data loaded, but the list is empty (0 products).';
+                    statusElement.className = 'text-sm mt-2 text-yellow-700 font-bold p-2 bg-yellow-100 rounded-lg mb-4';
+                }
+            } else {
+                statusElement.textContent = '❌ Error: Product data not loaded. Ensure productData.js is correctly linked.';
+                statusElement.className = 'text-sm mt-2 text-red-700 font-bold p-2 bg-red-100 rounded-lg mb-4';
+                document.getElementById('product-search-input').placeholder = "Data not loaded - check console.";
+            }
+        });
+    </script>
+</body>
+</html>

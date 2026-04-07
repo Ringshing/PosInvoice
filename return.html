@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Service Slip</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .scrollable-list { max-height: 250px; overflow-y: auto; border: 1px solid #e5e7eb; border-radius: 8px; }
+        @media print {
+            body { margin: 0; padding: 0; background: none; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+            .print-hidden { display: none !important; }
+            .label-container { width: 100mm; height: 150mm; box-shadow: none !important; border: 1px solid black; margin: 0; padding: 10px; }
+            .main-content { display: block; padding: 0; }
+        }
+    </style>
+</head>
+<body class="p-4 md:p-8 bg-gray-100">
+
+    <div class="max-w-6xl mx-auto main-content grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <div class="lg:col-span-2 print-hidden p-6 bg-white rounded-xl shadow-lg border border-gray-200">
+            <h1 class="text-3xl font-bold mb-6">Service Receiving Slip Builder</h1>
+            
+            <div class="mb-6 space-y-4">
+                <input type="text" id="customer-name" placeholder="Customer Name or #Order ID" class="w-full p-3 border border-gray-300 rounded-lg">
+            </div>
+
+            <div class="mb-6">
+                <label class="block text-sm font-medium mb-2">Service Type</label>
+                <div class="flex gap-4">
+                    <label><input type="radio" name="service-type" value="Resize" checked> Resize</label>
+                    <label><input type="radio" name="service-type" value="Repair"> Repair</label>
+                    <label><input type="radio" name="service-type" value="Return"> Return</label>
+                </div>
+            </div>
+
+            <input type="text" id="product-search" placeholder="Search product..." class="w-full p-3 border border-gray-300 rounded-lg mb-4">
+            <div id="search-results" class="scrollable-list bg-gray-50 mb-6"></div>
+
+            <h2 class="text-xl font-semibold mb-3">Items Received (<span id="total-items">0</span>)</h2>
+            <div id="selected-items-list" class="scrollable-list bg-white p-3 space-y-2 mb-6"></div>
+
+            <button onclick="saveAndPrintReturn()" class="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl">
+                Generate & Print Service Slip
+            </button>
+        </div>
+
+        <div class="lg:col-span-1 flex justify-center lg:block">
+            <div id="return-label" class="label-container bg-white"></div>
+        </div>
+    </div>
+
+    <script type="module" src="firebase-db.js"></script>
+    <script src="productData.js"></script>
+
+    <script>
+        let selectedProducts = [];
+
+        function renderSearchResults(query) {
+            const resultsDiv = document.getElementById('search-results');
+            resultsDiv.innerHTML = '';
+            if (query.length < 2 || typeof productData === 'undefined') return;
+
+            const filtered = productData.filter(p => p.title.toLowerCase().includes(query.toLowerCase())).slice(0, 10);
+            filtered.forEach(product => {
+                resultsDiv.innerHTML += `<div class="p-3 border-b cursor-pointer flex justify-between" onclick="addProduct('${product.id}')">
+                    <span>${product.title} - ${product.variant}</span><span class="text-blue-500 font-bold">Add</span>
+                </div>`;
+            });
+        }
+
+        function addProduct(id) {
+            const product = productData.find(p => p.id === id);
+            selectedProducts.push({ title: product.title, variant: product.variant, quantity: 1 });
+            renderSelectedItems();
+        }
+
+        function renderSelectedItems() {
+            const listDiv = document.getElementById('selected-items-list');
+            listDiv.innerHTML = '';
+            selectedProducts.forEach((item) => {
+                listDiv.innerHTML += `<div class="p-2 bg-gray-50 border rounded flex justify-between">
+                    <span>${item.title}</span><span>Qty: ${item.quantity}</span>
+                </div>`;
+            });
+            document.getElementById('total-items').textContent = selectedProducts.length;
+            updateLabel();
+        }
+
+        function updateLabel() {
+            const labelDiv = document.getElementById('return-label');
+            const customer = document.getElementById('customer-name').value;
+            const type = document.querySelector('input[name="service-type"]:checked').value;
+            
+            let itemsHtml = selectedProducts.map(i => `<p class="text-xs border-b pb-1 mb-1">${i.title} - Qty: ${i.quantity}</p>`).join('');
+
+            labelDiv.innerHTML = `
+                <h2 class="text-lg font-bold border-b-2 border-black mb-2 pb-1">SERVICE / RECEIVING SLIP</h2>
+                <p class="text-sm font-bold">CUSTOMER: ${customer}</p>
+                <p class="text-sm font-bold mb-4">SERVICE: ${type}</p>
+                <p class="text-sm font-bold underline mb-1">ITEMS:</p>
+                ${itemsHtml}
+            `;
+        }
+
+        function saveAndPrintReturn() {
+            if(selectedProducts.length === 0) return alert("Add items first");
+            
+            const record = {
+                customer: document.getElementById('customer-name').value,
+                serviceType: document.querySelector('input[name="service-type"]:checked').value,
+                items: selectedProducts,
+                date: new Date().toISOString(),
+                timestamp: Date.now()
+            };
+
+            if (window.saveReturnToCloud) window.saveReturnToCloud(record);
+            window.print();
+            selectedProducts = []; renderSelectedItems();
+        }
+
+        document.getElementById('product-search').addEventListener('input', (e) => renderSearchResults(e.target.value));
+        document.getElementById('customer-name').addEventListener('input', updateLabel);
+        updateLabel();
+    </script>
+</body>
+</html>
