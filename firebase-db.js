@@ -1,22 +1,7 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-app.js";
-import { 
-    getFirestore, 
-    initializeFirestore, 
-    persistentLocalCache, 
-    persistentMultipleTabManager, 
-    collection, 
-    addDoc, 
-    getDocs,
-    query,
-    where
-} from "https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js";
-import { 
-    getAuth, 
-    signInWithEmailAndPassword, 
-    onAuthStateChanged 
-} from "https://www.gstatic.com/firebasejs/10.11.0/firebase-auth.js";
+import { getFirestore, initializeFirestore, persistentLocalCache, persistentMultipleTabManager, collection, addDoc, getDocs, query, where } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js";
+import { getAuth, signInWithEmailAndPassword, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-auth.js";
 
-// Your specific Firebase configuration
 const firebaseConfig = {
     apiKey: "AIzaSyApr0wOhEROd61l4CuXrrxK3qonOvEDbeE",
     authDomain: "ringshinginvoicepos.firebaseapp.com",
@@ -27,122 +12,60 @@ const firebaseConfig = {
     measurementId: "G-2Q9Q1S049W"
 };
 
-// 1. Initialize Firebase App
+// 1. Connection Engine
 const app = initializeApp(firebaseConfig);
-
-// 2. Initialize Auth
 const auth = getAuth(app);
-
-// 3. Initialize Firestore with Multi-Tab Offline Persistence
 const db = initializeFirestore(app, {
-    localCache: persistentLocalCache({
-        tabManager: persistentMultipleTabManager()
-    })
+    localCache: persistentLocalCache({tabManager: persistentMultipleTabManager()})
 });
 
-// --- GLOBAL UTILITIES ---
-
-/**
- * Promise that resolves when the Firebase Auth state is determined.
- * Used by HTML pages to hide/show the lock screen.
- */
+// 2. Security Engine (The PIN Check)
 window.firebaseReady = new Promise((resolve) => {
-    onAuthStateChanged(auth, (user) => {
-        resolve(!!user); // true if logged in, false if not
-    });
+    onAuthStateChanged(auth, (user) => resolve(!!user));
 });
 
-/**
- * Validates the PIN entered by the user against Firebase Auth.
- * Uses a hardcoded email 'pos@ringshing.com'.
- */
 window.loginWithPin = async function(pin) {
     try {
         await signInWithEmailAndPassword(auth, "pos@ringshing.com", pin);
         return true;
-    } catch (error) {
-        console.error("Auth Error:", error.code);
-        return false;
-    }
+    } catch (error) { return false; }
 };
 
-/**
- * Saves a new invoice to the cloud. 
- * If offline, Firestore queues this and syncs automatically later.
- */
+// 3. Sales Engine (Saves to Cloud + Offline Queue)
 window.saveInvoiceToCloud = async function(invoiceData) {
-    if (!auth.currentUser) {
-        console.error("Save blocked: System locked.");
-        return;
-    }
-    try {
-        const docRef = await addDoc(collection(db, "invoices"), invoiceData);
-        console.log("Invoice synced/queued with ID: ", docRef.id);
-    } catch (e) {
-        console.error("Error saving invoice: ", e);
-    }
+    if (!auth.currentUser) return console.error("Database Locked");
+    // This line ensures 'total' is always saved for Analytics to read
+    const data = { ...invoiceData, total: invoiceData.total || invoiceData.grandTotal };
+    await addDoc(collection(db, "invoices"), data);
 };
 
-/**
- * Saves a return record to the cloud.
- */
+// 4. Returns Engine
 window.saveReturnToCloud = async function(returnData) {
     if (!auth.currentUser) return;
-    try {
-        await addDoc(collection(db, "returns"), returnData);
-        console.log("Return synced/queued.");
-    } catch (e) {
-        console.error("Error saving return: ", e);
-    }
+    await addDoc(collection(db, "returns"), returnData);
 };
 
-/**
- * Fetches all sales and returns for Analytics.
- */
+// 5. Analytics Engine (Powers your charts/totals)
 window.fetchStoreAnalytics = async function() {
-    if (!auth.currentUser) throw new Error("Unauthorized access. Please unlock the system.");
-    
-    try {
-        const salesSnapshot = await getDocs(collection(db, "invoices"));
-        const returnsSnapshot = await getDocs(collection(db, "returns"));
-
-        let sales = [];
-        salesSnapshot.forEach((doc) => sales.push(doc.data()));
-
-        let returns = [];
-        returnsSnapshot.forEach((doc) => returns.push(doc.data()));
-
-        return { sales, returns };
-    } catch (e) {
-        console.error("Error fetching analytics: ", e);
-        throw e;
-    }
+    if (!auth.currentUser) throw new Error("Locked");
+    const sSnap = await getDocs(collection(db, "invoices"));
+    const rSnap = await getDocs(collection(db, "returns"));
+    let sales = []; sSnap.forEach(doc => sales.push(doc.data()));
+    let returns = []; rSnap.forEach(doc => returns.push(doc.data()));
+    return { sales, returns };
 };
 
-/**
- * Search functionality for finding specific invoices.
- */
+// 6. Search Engine (Look up old invoices)
 window.searchInvoiceInCloud = async function(searchId, searchDate) {
     if (!auth.currentUser) return [];
-    
-    try {
-        const invoicesRef = collection(db, "invoices");
-        let q;
-
-        if (searchId) {
-            q = query(invoicesRef, where("id", "==", searchId));
-        } else if (searchDate) {
-            const startOfDay = searchDate + "T00:00:00";
-            const endOfDay = searchDate + "T23:59:59";
-            q = query(invoicesRef, where("date", ">=", startOfDay), where("date", "<=", endOfDay));
-        }
-
-        const snapshot = await getDocs(q);
-        let results = [];
-        snapshot.forEach(doc => results.push(doc.data()));
-        return results;
-    } catch (e) {
-        console.error("Search failed:", e);
-        return [];
+    const invoicesRef = collection(db, "invoices");
+    let q;
+    if (searchId) {
+        q = query(invoicesRef, where("id", "==", searchId));
+    } else if (searchDate) {
+        q = query(invoicesRef, where("date", ">=", searchDate + "T00:00:00"), where("date", "<=", searchDate + "T23:59:59"));
     }
+    const snapshot = await getDocs(q);
+    let res = []; snapshot.forEach(doc => res.push(doc.data()));
+    return res;
 };

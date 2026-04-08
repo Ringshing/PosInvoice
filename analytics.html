@@ -1,108 +1,36 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Cloud Analytics</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-</head>
-<div id="pin-lock-screen" class="fixed inset-0 bg-gray-900 bg-opacity-95 z-[9999] flex flex-col items-center justify-center print:hidden">
+<head><meta charset="UTF-8"><title>Analytics</title><script src="https://cdn.tailwindcss.com"></script></head>
+<body class="bg-gray-100 p-8">
+<div id="pin-lock-screen" class="fixed inset-0 bg-gray-900 bg-opacity-95 z-[9999] flex flex-col items-center justify-center">
     <div class="bg-white p-8 rounded-xl shadow-2xl text-center max-w-sm w-full">
-        <h2 class="text-2xl font-bold mb-4 text-gray-800">System Locked</h2>
-        <input type="password" id="pos-pin" placeholder="Enter PIN" class="w-full p-3 border-2 border-gray-300 rounded mb-4 text-center text-2xl tracking-widest outline-none focus:border-blue-500">
-        <button onclick="unlockSystem()" class="w-full bg-blue-600 text-white p-3 rounded font-bold hover:bg-blue-700 transition-colors">Unlock POS</button>
-        <p id="pin-error" class="text-red-500 mt-3 text-sm font-bold hidden">Incorrect PIN or Offline</p>
+        <h2 class="text-2xl font-bold mb-4">System Locked</h2>
+        <input type="password" id="pos-pin" placeholder="Enter PIN" class="w-full p-3 border rounded mb-4 text-center text-2xl tracking-widest">
+        <button onclick="unlockSystem()" class="w-full bg-blue-600 text-white p-3 rounded font-bold">Unlock Analytics</button>
     </div>
 </div>
-
+<div class="max-w-4xl mx-auto">
+    <div class="flex justify-between mb-8"><h1 class="text-2xl font-bold">📊 Cloud Analytics</h1><a href="index.html" class="bg-blue-600 text-white px-4 py-2 rounded">Home</a></div>
+    <div class="grid grid-cols-2 gap-6 mb-8">
+        <div class="bg-white p-6 rounded-lg shadow border-l-4 border-green-500"><h3 class="text-gray-500 text-sm">Total Sales</h3><p id="total-val" class="text-3xl font-bold">Rs 0</p></div>
+        <div class="bg-white p-6 rounded-lg shadow border-l-4 border-blue-500"><h3 class="text-gray-500 text-sm">Invoices</h3><p id="count-val" class="text-3xl font-bold">0</p></div>
+    </div>
+    <button onclick="load()" class="w-full bg-gray-800 text-white py-2 rounded">↻ Sync Data</button>
+</div>
+<script type="module" src="firebase-db.js"></script>
 <script>
     async function unlockSystem() {
-        const pin = document.getElementById('pos-pin').value;
-        const btn = document.querySelector('#pin-lock-screen button');
-        btn.innerText = "Verifying...";
-        
-        // Wait for Firebase to be ready
-        if(!window.loginWithPin) {
-            setTimeout(unlockSystem, 500);
-            return;
-        }
-
-        const success = await window.loginWithPin(pin);
-        if (success) {
-            document.getElementById('pin-lock-screen').style.display = 'none';
-            // Trigger a data refresh for analytics specifically
-            if (typeof loadAnalytics === 'function') {
-                loadAnalytics();
-            }
-        } else {
-            document.getElementById('pin-error').classList.remove('hidden');
-            btn.innerText = "Unlock POS";
-            document.getElementById('pos-pin').value = "";
-        }
+        const ok = await window.loginWithPin(document.getElementById('pos-pin').value);
+        if(ok) { document.getElementById('pin-lock-screen').style.display='none'; load(); }
     }
-
-    // Auto-check if already logged in
-    window.addEventListener('load', async () => {
-        if(window.firebaseReady) {
-            const isLoggedIn = await window.firebaseReady;
-            if(isLoggedIn) {
-                document.getElementById('pin-lock-screen').style.display = 'none';
-            }
-        }
-    });
-</script>
-<body class="bg-gray-100 font-sans p-8">
-    <div class="max-w-6xl mx-auto">
-        <div class="flex justify-between items-center mb-8 bg-white p-4 rounded-lg shadow">
-            <h1 class="text-2xl font-bold text-gray-800">📊 Cloud Store Analytics</h1>
-            <a href="index.html" class="bg-blue-600 text-white px-4 py-2 rounded">🏠 Home</a>
-        </div>
-
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-            <div class="bg-white p-6 rounded-lg shadow-lg border-l-4 border-green-500">
-                <h3 class="text-gray-500 text-sm font-bold">Total Sales (Cloud Synced)</h3>
-                <p id="sales-total" class="text-3xl font-bold mt-2">Rs 0</p>
-                <p id="sales-count" class="text-sm text-green-600 mt-1">0 Invoices</p>
-            </div>
-            <div class="bg-white p-6 rounded-lg shadow-lg border-l-4 border-red-500">
-                <h3 class="text-gray-500 text-sm font-bold">Total Services/Returns</h3>
-                <p id="returns-count" class="text-3xl font-bold mt-2">0 Slips</p>
-            </div>
-        </div>
-        
-        <div class="bg-white p-6 rounded-lg shadow-lg text-center">
-            <button onclick="loadAnalytics()" class="bg-gray-800 text-white px-6 py-2 rounded shadow hover:bg-gray-900">
-                ↻ Sync & Refresh Data
-            </button>
-            <p id="status-text" class="text-sm text-gray-500 mt-2">Click to pull latest data from Firestore</p>
-        </div>
-    </div>
-
-    <script type="module" src="firebase-db.js"></script>
-<script>
-        async function loadAnalytics() {
-    const statusText = document.getElementById('status-text');
-    statusText.innerText = "Syncing from cloud...";
-    
-    try {
-        // Wait for the login to be verified
-        await window.firebaseReady; 
-        
+    window.addEventListener('load', async () => { if(await window.firebaseReady) { document.getElementById('pin-lock-screen').style.display='none'; load(); } });
+    async function load() {
+        if(!window.fetchStoreAnalytics) return;
         const data = await window.fetchStoreAnalytics();
-        
-        // Ensure calculations use numbers
-        let totalSales = data.sales.reduce((sum, item) => sum + (Number(item.total) || 0), 0);
-        
-        document.getElementById('sales-total').innerText = 'Rs ' + totalSales.toLocaleString();
-        document.getElementById('sales-count').innerText = data.sales.length + ' Invoices';
-        document.getElementById('returns-count').innerText = data.returns.length + ' Slips';
-        statusText.innerText = "Data up to date!";
-    } catch(e) {
-        console.error(e);
-        statusText.innerText = "Failed to load data. System locked or offline.";
+        const total = data.sales.reduce((s, i) => s + (Number(i.total) || 0), 0);
+        document.getElementById('total-val').innerText = "Rs " + total.toLocaleString();
+        document.getElementById('count-val').innerText = data.sales.length;
     }
-}
-window.onload = loadAnalytics;
-    </script>
+</script>
 </body>
 </html>
