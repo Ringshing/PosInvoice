@@ -1,99 +1,276 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8"><title>PKR Invoice | Ringshing POS</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PKR Invoice | Ringshing POS</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
     <style>
-        body { font-family: 'Inter', sans-serif; background: #f3f4f6; }
-        .receipt-container { max-width: 80mm; padding: 5px; margin: 0 auto; background: white; font-family: monospace; font-size: 12px; }
+        body { font-family: 'Inter', sans-serif; background-color: #f3f4f6; }
+        .receipt-container { 
+            max-width: 80mm; padding: 5px; margin: 0 auto; background-color: white; 
+            color: black; font-family: 'Consolas', 'Courier New', monospace; 
+            font-size: 12px; min-height: 160mm; 
+        }
         .dotted-line { border-top: 2px solid black; margin: 5px 0; }
-        @media print { .no-print { display: none !important; } .receipt-container { display: block !important; width: 80mm !important; } }
+        @media print {
+            @page { margin: 0; size: 80mm auto; }
+            body { margin: 0 !important; padding: 0 !important; width: 80mm !important; background-color: white; -webkit-print-color-adjust: exact; }
+            .no-print { display: none !important; }
+            .receipt-container { display: block !important; max-width: 80mm !important; box-shadow: none; break-inside: avoid; }
+        }
+        #print-area { display: none; }
+        #history-result-container { border: 2px dashed #000; padding: 10px; margin-top: 15px; background-color: #f9f9f9; }
     </style>
 </head>
 <body>
+
 <div id="pin-lock-screen" class="fixed inset-0 bg-gray-900 bg-opacity-95 z-[9999] flex flex-col items-center justify-center print:hidden">
     <div class="bg-white p-8 rounded-xl shadow-2xl text-center max-w-sm w-full">
-        <h2 class="text-2xl font-bold mb-4">System Locked</h2>
-        <input type="password" id="pos-pin" placeholder="Enter PIN" class="w-full p-3 border rounded mb-4 text-center text-2xl tracking-widest">
-        <button onclick="unlockSystem()" class="w-full bg-blue-600 text-white p-3 rounded font-bold">Unlock POS</button>
-        <p id="pin-error" class="text-red-500 mt-3 hidden">Incorrect PIN</p>
+        <h2 class="text-2xl font-bold mb-4 text-gray-800">System Locked</h2>
+        <input type="password" id="pos-pin" placeholder="Enter PIN" class="w-full p-3 border-2 border-gray-300 rounded mb-4 text-center text-2xl tracking-widest outline-none focus:border-blue-500">
+        <button onclick="unlockSystem()" class="w-full bg-blue-600 text-white p-3 rounded font-bold hover:bg-blue-700 transition-colors">Unlock POS</button>
+        <p id="pin-error" class="text-red-500 mt-3 text-sm font-bold hidden">Incorrect PIN or Offline</p>
     </div>
 </div>
 
-<div class="container mx-auto p-4 md:p-8 no-print">
-    <div class="max-w-2xl mx-auto bg-white p-6 rounded-lg shadow-lg">
-        <h1 class="text-2xl font-bold mb-4">New Invoice</h1>
-        <div class="grid grid-cols-2 gap-4 mb-4">
-            <input type="text" id="invoice-id" class="p-2 border rounded bg-gray-50" readonly>
-            <input type="text" id="customer-name" placeholder="Customer Name" class="p-2 border rounded">
+<script>
+    async function unlockSystem() {
+        const pin = document.getElementById('pos-pin').value;
+        if(!window.loginWithPin) { setTimeout(unlockSystem, 500); return; }
+        const success = await window.loginWithPin(pin);
+        if (success) { document.getElementById('pin-lock-screen').style.display = 'none'; } 
+        else { document.getElementById('pin-error').classList.remove('hidden'); }
+    }
+    window.addEventListener('load', async () => {
+        if(window.firebaseReady && await window.firebaseReady) {
+            document.getElementById('pin-lock-screen').style.display = 'none';
+        }
+    });
+</script>
+
+<div class="container mx-auto p-4 md:p-8">
+    <div class="no-print w-full lg:w-3/4 xl:w-1/2 mx-auto">
+        <h1 class="text-3xl font-bold mb-6 text-gray-800 text-center">PKR Invoice Generator</h1>
+
+        <div class="bg-white p-4 rounded-lg shadow-lg mb-4">
+            <h3 class="text-lg font-semibold mb-3 text-gray-700">Store Settings</h3>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <input type="text" id="company-name" value="Ringshing.com" class="p-2 border rounded">
+                <input type="text" id="address-line-1" value="Ground Floor, Avenue Mall, DHA, Lahore" class="p-2 border rounded">
+                <input type="text" id="address-line-2" value="Phone: 0303-5133646" class="p-2 border rounded">
+                <input type="text" id="invoice-id" class="p-2 border rounded font-mono font-bold bg-gray-50" readonly>
+            </div>
         </div>
-        <div class="flex space-x-4 mb-4">
-            <label><input type="radio" name="pay-method" value="Cash" checked> Cash</label>
-            <label><input type="radio" name="pay-method" value="Card"> Card</label>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+            <div class="bg-white p-4 rounded-lg shadow-lg border-l-4 border-green-500">
+                <h3 class="text-lg font-semibold mb-2">Customer</h3>
+                <input type="text" id="customer-name" placeholder="Customer Name" class="w-full p-2 border rounded mb-2">
+                <input type="text" id="customer-phone" placeholder="Phone/Details" class="w-full p-2 border rounded">
+            </div>
+            <div class="bg-white p-4 rounded-lg shadow-lg border-l-4 border-red-500">
+                <h3 class="text-lg font-semibold mb-2">Payment Method</h3>
+                <div class="flex flex-col space-y-1 mt-2">
+                    <label><input type="radio" name="payment-method" value="Cash" checked> Cash</label>
+                    <label><input type="radio" name="payment-method" value="Card"> Card</label>
+                    <label><input type="radio" name="payment-method" value="Bank Transfer"> Bank Transfer</label>
+                </div>
+            </div>
         </div>
-        <div class="relative mb-4">
-            <input type="text" id="product-search" placeholder="Search product..." class="w-full p-3 border-2 border-blue-100 rounded">
-            <div id="results" class="absolute z-10 w-full bg-white border rounded hidden max-h-48 overflow-y-auto shadow-xl"></div>
+
+        <div class="bg-white p-4 rounded-lg shadow-lg mb-4">
+            <div id="product-load-status" class="text-xs p-2 rounded mb-2 bg-blue-50 text-blue-700">Checking data...</div>
+            <input type="text" id="product-search-input" placeholder="Search product name or code..." class="w-full p-3 border-2 border-blue-100 rounded-lg outline-none focus:border-blue-400">
+            <div id="product-results" class="absolute z-10 w-full md:w-[400px] bg-white border rounded shadow-2xl mt-1 hidden max-h-60 overflow-y-auto"></div>
         </div>
-        <table class="w-full mb-4">
-            <thead><tr class="border-b text-left text-sm"><th>Item</th><th>Qty</th><th>Total</th><th></th></tr></thead>
-            <tbody id="cart-body"></tbody>
-        </table>
-        <div class="text-right font-bold text-xl mb-6">Total: <span id="grand-total">Rs 0</span></div>
-        <button onclick="saveAndPrint()" class="w-full bg-purple-700 text-white py-4 rounded-xl text-xl font-bold">🖨️ Save & Print</button>
+
+        <div class="bg-white p-4 rounded-lg shadow-lg mb-4 border-t-4 border-blue-500">
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <input type="text" id="new-item-desc" placeholder="Product Description" class="col-span-2 p-2 border rounded bg-gray-50" readonly>
+                <input type="number" id="new-item-qty" value="1" class="p-2 border rounded">
+                <input type="number" id="new-item-price" placeholder="Price" class="p-2 border rounded bg-gray-50" readonly>
+            </div>
+            <div class="flex space-x-2 mt-4">
+                <button onclick="commitNewLineItem()" class="w-full bg-blue-600 text-white font-bold py-2 rounded shadow">Add to List</button>
+                <button onclick="toggleManual()" id="manual-btn" class="w-1/2 bg-gray-500 text-white py-2 rounded text-sm">Manual Mode</button>
+            </div>
+        </div>
+
+        <div class="bg-white p-4 rounded-lg shadow-lg">
+            <table class="w-full mb-4 text-sm">
+                <thead><tr class="border-b text-left text-gray-500"><th>Item</th><th>Qty</th><th>Price</th><th>Total</th><th></th></tr></thead>
+                <tbody id="items-table-body"></tbody>
+            </table>
+            
+            <div class="flex justify-end mt-4 border-t pt-4">
+                <div class="w-full md:w-1/2 space-y-2">
+                    <div class="flex justify-between"><span>Subtotal:</span><span id="sub-total">Rs 0</span></div>
+                    <div class="flex justify-between text-red-600">
+                        <span>Discount (%):</span>
+                        <input type="number" id="discount-percentage" value="0" oninput="applyDiscount('percentage')" class="w-20 text-right border rounded">
+                    </div>
+                    <div class="flex justify-between text-red-600">
+                        <span>Discount (Rs):</span>
+                        <input type="number" id="discount-amount" value="0" oninput="applyDiscount('amount')" class="w-20 text-right border rounded">
+                    </div>
+                    <div class="flex justify-between text-xl font-extrabold border-t pt-2">
+                        <span>GRAND TOTAL:</span><span id="grand-total">Rs 0</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <button onclick="saveAndPrint()" class="w-full mt-6 bg-purple-700 hover:bg-purple-800 text-white font-bold py-5 rounded-xl text-2xl shadow-xl transition-transform active:scale-95">
+            🖨️ Save & Print Invoice
+        </button>
+
+        <div class="mt-10 bg-white p-6 rounded-lg shadow-lg border-t-4 border-yellow-500">
+            <h3 class="font-bold text-lg mb-4 text-yellow-700">🔍 Cloud Record Lookup</h3>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-2">
+                <input type="text" id="search-id" placeholder="Invoice ID" class="p-2 border rounded">
+                <input type="date" id="search-date" class="p-2 border rounded">
+                <button onclick="searchHistory()" class="bg-yellow-600 text-white font-bold rounded">Search</button>
+            </div>
+            <div id="history-result-container" class="mt-4 text-sm italic text-gray-500">Search results will appear here.</div>
+        </div>
     </div>
+
+    <div id="print-area" class="receipt-container"></div>
 </div>
-<div id="print-area" class="receipt-container"></div>
 
 <script type="module" src="firebase-db.js"></script>
 <script src="productData.js"></script>
+
 <script>
-    let cart = [];
-    async function unlockSystem() {
-        const pin = document.getElementById('pos-pin').value;
-        const ok = await window.loginWithPin(pin);
-        if(ok) document.getElementById('pin-lock-screen').style.display = 'none';
-        else document.getElementById('pin-error').classList.remove('hidden');
+    let items = [];
+    const START_ID = 5874;
+
+    function formatPKR(num) { return "Rs " + Number(num).toLocaleString(); }
+
+    window.onload = () => {
+        document.getElementById('invoice-id').value = localStorage.getItem('lastInvoiceId') || START_ID;
+        renderItems();
+        if(typeof productData !== 'undefined') {
+            const s = document.getElementById('product-load-status');
+            s.innerText = `✅ ${productData.length} Products Loaded`;
+            s.className = "text-xs p-2 rounded mb-2 bg-green-100 text-green-700";
+        }
+    };
+
+    function toggleManual() {
+        const d = document.getElementById('new-item-desc'), p = document.getElementById('new-item-price');
+        d.readOnly = !d.readOnly; p.readOnly = !p.readOnly;
+        d.classList.toggle('bg-gray-50'); p.classList.toggle('bg-gray-50');
+        document.getElementById('manual-btn').innerText = d.readOnly ? "Manual Mode" : "Select Mode";
     }
-    window.addEventListener('load', async () => {
-        document.getElementById('invoice-id').value = localStorage.getItem('lastId') || 5874;
-        if(await window.firebaseReady) document.getElementById('pin-lock-screen').style.display = 'none';
-    });
-    document.getElementById('product-search').addEventListener('input', (e) => {
+
+    // --- SEARCH ---
+    document.getElementById('product-search-input').addEventListener('input', (e) => {
         const q = e.target.value.toLowerCase();
-        const res = document.getElementById('results');
+        const res = document.getElementById('product-results');
         res.innerHTML = "";
         if(q.length < 2) return res.classList.add('hidden');
-        productData.filter(p => p.title.toLowerCase().includes(q)).slice(0,5).forEach(p => {
+        
+        const matches = productData.filter(p => p.title.toLowerCase().includes(q)).slice(0, 8);
+        matches.forEach(p => {
             const div = document.createElement('div');
-            div.className = "p-2 hover:bg-gray-100 cursor-pointer border-b";
-            div.innerHTML = `<b>${p.title}</b> - Rs ${p.price}`;
-            div.onclick = () => { cart.push({desc: p.title, price: p.price, qty: 1}); render(); res.classList.add('hidden'); };
+            div.className = "p-3 hover:bg-blue-50 cursor-pointer border-b text-sm";
+            div.innerHTML = `<strong>${p.title}</strong><br>Rs ${p.price}`;
+            div.onclick = () => {
+                document.getElementById('new-item-desc').value = p.title;
+                document.getElementById('new-item-price').value = p.price;
+                res.classList.add('hidden');
+            };
             res.appendChild(div);
         });
         res.classList.remove('hidden');
     });
-    function render() {
-        const body = document.getElementById('cart-body');
-        let total = 0;
-        body.innerHTML = "";
-        cart.forEach((item, i) => {
-            let rowTotal = item.price * item.qty;
-            total += rowTotal;
-            body.innerHTML += `<tr class="border-b"><td>${item.desc}</td><td>${item.qty}</td><td>${rowTotal}</td><td><button onclick="cart.splice(${i},1);render()" class="text-red-500">X</button></td></tr>`;
-        });
-        document.getElementById('grand-total').innerText = "Rs " + total.toLocaleString();
-        document.getElementById('print-area').innerHTML = `<div class="text-center"><b>RINGSHING</b><br>Invoice: ${document.getElementById('invoice-id').value}</div><div class="dotted-line"></div>` + 
-            cart.map(i => `<div class="flex justify-between"><span>${i.desc}</span><span>${i.price * i.qty}</span></div>`).join('') + `<div class="dotted-line"></div><div class="text-right font-bold">TOTAL: Rs ${total}</div>`;
+
+    // --- CART ---
+    function commitNewLineItem() {
+        const d = document.getElementById('new-item-desc').value;
+        const p = parseFloat(document.getElementById('new-item-price').value);
+        const q = parseInt(document.getElementById('new-item-qty').value);
+        if(!d || isNaN(p)) return alert("Select a product first");
+        items.push({ description: d, unitPrice: p, qty: q });
+        renderItems();
     }
+
+    function applyDiscount(type) {
+        if(type === 'percentage') document.getElementById('discount-amount').value = 0;
+        else document.getElementById('discount-percentage').value = 0;
+        renderItems();
+    }
+
+    function renderItems() {
+        const body = document.getElementById('items-table-body'), print = document.getElementById('print-area');
+        body.innerHTML = "";
+        let sub = 0;
+
+        let receiptHeader = `<div class="text-center"><img src="logo (2).png" style="width:50mm;margin:0 auto"><br>${document.getElementById('address-line-1').value}<br>ID: ${document.getElementById('invoice-id').value}</div><div class="dotted-line"></div>`;
+        let receiptItems = "";
+
+        items.forEach((item, idx) => {
+            let total = item.qty * item.unitPrice;
+            sub += total;
+            body.innerHTML += `<tr class="border-b"><td>${item.description}</td><td>${item.qty}</td><td>${item.unitPrice}</td><td>${total}</td><td><button onclick="items.splice(${idx},1);renderItems()" class="text-red-500">X</button></td></tr>`;
+            receiptItems += `<div class="flex justify-between"><span>${item.description}</span><span>${total}</span></div>`;
+        });
+
+        const dP = parseFloat(document.getElementById('discount-percentage').value) || 0;
+        const dA = parseFloat(document.getElementById('discount-amount').value) || 0;
+        const discount = dP > 0 ? (sub * (dP/100)) : dA;
+        const grand = sub - discount;
+
+        document.getElementById('sub-total').innerText = formatPKR(sub);
+        document.getElementById('grand-total').innerText = formatPKR(grand);
+
+        print.innerHTML = receiptHeader + receiptItems + `<div class="dotted-line"></div><div class="flex justify-between font-bold text-lg"><span>TOTAL</span><span>${formatPKR(grand)}</span></div>` + `<div class="dotted-line"></div><div class="text-center"><img src="qr.png" style="width:30mm;margin:10px auto"><br>Thank You!</div>`;
+    }
+
+    // --- SAVE & CLOUD ---
     async function saveAndPrint() {
-        if(cart.length === 0) return;
-        const total = cart.reduce((a, b) => a + (b.price * b.qty), 0);
-        const record = { id: document.getElementById('invoice-id').value, date: new Date().toISOString(), items: cart, total: total, payment: document.querySelector('input[name="pay-method"]:checked').value };
+        if(items.length === 0) return alert("Cart is empty");
+        
+        const sub = items.reduce((a, b) => a + (b.qty * b.unitPrice), 0);
+        const dP = parseFloat(document.getElementById('discount-percentage').value) || 0;
+        const dA = parseFloat(document.getElementById('discount-amount').value) || 0;
+        const discount = dP > 0 ? (sub * (dP/100)) : dA;
+
+        const record = {
+            id: document.getElementById('invoice-id').value,
+            date: new Date().toISOString(),
+            items: items,
+            total: sub - discount,
+            customer: document.getElementById('customer-name').value,
+            payment: document.querySelector('input[name="payment-method"]:checked').value
+        };
+
         if(window.saveInvoiceToCloud) await window.saveInvoiceToCloud(record);
+
+        document.getElementById('print-area').style.display = 'block';
         window.print();
-        localStorage.setItem('lastId', parseInt(record.id) + 1);
+        document.getElementById('print-area').style.display = 'none';
+
+        localStorage.setItem('lastInvoiceId', parseInt(record.id) + 1);
         location.reload();
+    }
+
+    async function searchHistory() {
+        const id = document.getElementById('search-id').value;
+        const date = document.getElementById('search-date').value;
+        const cont = document.getElementById('history-result-container');
+        cont.innerText = "Searching Cloud...";
+        
+        if(window.searchInvoiceInCloud) {
+            const results = await window.searchInvoiceInCloud(id, date);
+            if(results.length > 0) {
+                const r = results[0];
+                cont.innerHTML = `<div class="bg-gray-100 p-3 rounded text-black font-mono">ID: ${r.id}<br>Total: Rs ${r.total}<br>Customer: ${r.customer || 'N/A'}<br>Payment: ${r.payment}</div>`;
+            } else cont.innerText = "No record found.";
+        }
     }
 </script>
 </body>
